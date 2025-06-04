@@ -1,7 +1,7 @@
 from app.ingestion.gdrive_indexer import GDriveQdrantIndexer
 
 indexer = GDriveQdrantIndexer(
-    service_account_key_path="../../config/service_account_key.json",
+    service_account_key_path="./config/service_account_key.json",
     folder_id="<<drive_id 변수>>",
     collection_name="gdrive_docs0",
     qdrant_host="localhost",

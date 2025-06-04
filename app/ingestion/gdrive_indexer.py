@@ -30,7 +30,7 @@ from googleapiclient.discovery import build
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from llama_index.core.node_parser import SentenceSplitter
 import nltk
-from config import CLIENT_CONFIG, SCOPES, TOKEN_PATH
+from config.google_auth import CLIENT_CONFIG, SCOPES, TOKEN_PATH
 
 from functools import lru_cache
 

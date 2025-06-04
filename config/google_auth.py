@@ -3,8 +3,8 @@ from pathlib import Path
 
 
 class _GoogleOAuthSettings(BaseSettings):
-    CLIENT_ID: str
-    CLIENT_SECRET: str
+    CLIENT_ID: str | None = None
+    CLIENT_SECRET: str | None = None
 
     PROJECT_ID: str = "uiet-platform-459805-f5"
     AUTH_URI: str = "https://accounts.google.com/o/oauth2/auth"

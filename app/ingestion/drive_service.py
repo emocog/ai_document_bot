@@ -3,17 +3,18 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
-from config import CLIENT_CONFIG, SCOPES, TOKEN_PATH
+from config.google_auth import CLIENT_CONFIG, SCOPES, TOKEN_PATH
 
 
-service_account_key_path = "../../config/service_account_key.json"
-service_token_path = "../../config/token.json"
+service_account_key_path = "./config/service_account_key.json"
+service_token_path = "./config/token.json"
 
 
 def get_drive_service():
     creds = None
     token_path = service_token_path
     # (1) 저장된 토큰 파일(token.json)이 있으면 불러오기
+    print(token_path)
     if os.path.exists(token_path):
         creds = Credentials.from_authorized_user_file(token_path, SCOPES)
 
