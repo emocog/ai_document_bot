@@ -400,7 +400,7 @@ class GDriveQdrantIndexer:
             meta = (
                 self.drive_service.files()
                 .get(
-                    fileId=file_id,
+                    fileId=fid,
                     fields="id, name, parents",
                     supportsAllDrives=True,
                 )
