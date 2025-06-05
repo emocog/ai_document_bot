@@ -41,7 +41,7 @@ class GDriveQdrantIndexer:
     def __init__(
         self,
         service_account_key_path: str,
-        folder_id: str,
+        folder_id: List[str],
         collection_name: str,
         qdrant_host: str,
         qdrant_port: int,
@@ -50,7 +50,7 @@ class GDriveQdrantIndexer:
         drive_id: str = None,
         page_token_path: str = "start_page_token.txt",
         vectorizer_path: str = "fitted_tfidf_vectorizer.joblib",
-        service_token_path: str = "token.json",
+        service_token_path: str = "/home/emocog/llama-index/token.json"
     ):
         self.service_account_key_path = service_account_key_path
         self.folder_id = folder_id
@@ -64,8 +64,6 @@ class GDriveQdrantIndexer:
             api_key="fake",
             embed_batch_size=10,
         )
-        self.docs = []
-        # self.nodes = []
         self.drive_id = drive_id
         self.page_token_path = page_token_path
         self.vectorizer_path = vectorizer_path
@@ -136,13 +134,14 @@ class GDriveQdrantIndexer:
         self.drive_service = service
         return service
 
-    def change_folder(self, folder_id: str):
+
+    def change_folder(self, folder_id: List[str]):
         self.folder_id = folder_id
 
     def recreate_collection(self):
         # 1) 컬렉션 존재 여부 확인
         if self.qdrant_client.collection_exists(self.collection_name):
-            # 2) 이미 있으면 삭제
+            # 2) 이미 있으면 삭제?
             # self.qdrant_client.delete_collection(collection_name=self.collection_name)
             return
         # 3) 새로운 컬렉션 생성
@@ -153,19 +152,24 @@ class GDriveQdrantIndexer:
         )
 
     def load_documents(self):
-        loader = GoogleDriveReader(
-            service_account_key_path=self.service_account_key_path,
-            folder_id=self.folder_id,
-            drive_id=self.drive_id,
-            recursive=True,
-            token_path="token.json",
-        )
-        docs = loader.load_data()
-        for doc in docs:
-            bname = os.path.basename(doc.metadata["file path"])
-            ext = os.path.splitext(bname)[1]
-            doc.metadata["file_name"] = bname
-            doc.metadata["file_type"] = ext
+        docs = []
+        folders = self.folder_id
+        for folder in folders:
+            loader = GoogleDriveReader(
+                service_account_key_path=self.service_account_key_path,
+                folder_id=folder,
+                drive_id=self.drive_id,
+                recursive=True,
+                token_path=self.service_token_path,
+            )
+            loaded_docs = loader.load_data()
+            for doc in loaded_docs:
+                bname = os.path.basename(doc.metadata['file path'])
+                ext = os.path.splitext(bname)[1]
+                doc.metadata['file_name'] = bname
+                doc.metadata['file_type'] = ext
+            docs.extend(loaded_docs)
+
         print(f"[load] {len(docs)}개의 문서를 로드했습니다.")
         return docs
 
@@ -199,7 +203,7 @@ class GDriveQdrantIndexer:
 
     def parse_documents_batch(self, docs, max_workers: int = 16):
         """
-        self.docs에 담긴 문서를 병렬로 parse_document에 넘겨 노드 생성 후 self.nodes에 합칩니다.
+        docs에 담긴 문서를 병렬로 parse_document에 넘겨 노드 생성 후 nodes에 합칩니다.
         """
         nodes = []
         with ThreadPoolExecutor(max_workers=max_workers) as exe:
@@ -259,7 +263,7 @@ class GDriveQdrantIndexer:
             service_account_key_path=self.service_account_key_path,
             file_ids=[file_id],
             recursive=False,
-            token_path="token.json",
+            token_path=self.service_token_path,
         )
 
         docs = loader.load_data()
@@ -362,13 +366,13 @@ class GDriveQdrantIndexer:
         )
         return result.points if hasattr(result, "points") else []
 
-    def upload_drive_folder(self, folder_id: str):
+    def upload_drive_folder(self, folder_id: List[str] = None):
         """
         Google Drive 폴더에 있는 모든 파일을 Qdrant에 업서트합니다.
         :param folder_id: Google Drive 폴더 ID
         """
-
-        self.change_folder(folder_id)
+        if folder_id:
+            self.change_folder(folder_id)
         self.recreate_collection()
         start_token = self._get_start_page_token()
         docs = self.load_documents()
@@ -396,7 +400,7 @@ class GDriveQdrantIndexer:
             meta = (
                 self.drive_service.files()
                 .get(
-                    fileId=file_id,
+                    fileId=fid,
                     fields="id, name, parents",
                     supportsAllDrives=True,
                 )
@@ -467,16 +471,21 @@ class GDriveQdrantIndexer:
                 parents = file_meta.get("parents", [])
                 removed = change.get("removed") or change["file"].get("trashed", False)
                 # — 삭제 혹은 휴지통 이동된 파일
-                under_target = self._is_under_target_folder(
-                    fid, self.folder_id, self.drive_id
-                )
+                under_target = False
+                for folder in self.folder_id:
+                    if self._is_under_target_folder(fid, folder, self.drive_id):
+                        under_target = True
+                        break
 
+                    if folder in parents:
+                        under_target = True
+                        break
+                #under_target = self._is_under_target_folder(fid, self.folder_id, self.drive_id)
+                
                 print("parents:", parents, file_meta)
                 # print("under_target:", under_target)
-                if self.folder_id not in parents and not under_target:
-                    print(
-                        f"[skip] {fid}는 타겟 폴더({self.folder_id})에 속하지 않습니다."
-                    )
+                if not under_target:
+                    print(f"[skip] {fid}는 타겟 폴더({self.folder_id})에 속하지 않습니다.")
                     continue
 
                 self._delete_qdrant_points_for(fid)
